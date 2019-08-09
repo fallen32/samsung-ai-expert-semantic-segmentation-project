@@ -14,5 +14,10 @@ $ bash download.sh
 ```
 
 ### 3. Project Description
-#### 3-1. Train FCN on Cityscapes dataset
+#### 3-1. Train and evaluate FCN on Cityscapes dataset
 see `fcn8s_tutorial.ipynb`
+#### 3-2. Implement DeepLab based on `fcn8s_tensorflow.py`
+##### 3-2-1. copy `fcn8s_tensorflow.py` to `deeplab_tensorflow.py`
+```
+cp fcn8s_tensorflow.py deeplab_tensorflow.py
+```
