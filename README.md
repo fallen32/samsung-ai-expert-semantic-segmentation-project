@@ -45,3 +45,9 @@ from deeplab_tensorflow import FCN8s # replace fcn8s_tensorflow module with deep
 <br>
 
 #### 3-4. Discussion on FCN and DeepLab
+Implement metrics for per-class iou and compare the performance of FCN with that of DeepLab <br>
+See api for tf.metrics.mean_iou([link](https://www.tensorflow.org/api_docs/python/tf/metrics/mean_iou))
+<br>
+<br>
+
+#### 3-5. Discussion on FCN and DeepLab
