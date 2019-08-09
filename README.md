@@ -1,5 +1,5 @@
 ## FCN-8s implementation in TensorFlow
-[original repo](https://github.com/pierluigiferrari/fcn8s_tensorflow)
+[see original repo](https://github.com/pierluigiferrari/fcn8s_tensorflow)
 
 
 ### 1. Install Packages
