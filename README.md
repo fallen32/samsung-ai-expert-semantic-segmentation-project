@@ -49,6 +49,5 @@ Please refer to the followings <br>
 (4) tensorflow implementation of tf.metrics.mean_iou ([link](https://github.com/tensorflow/tensorflow/tree/r1.14/tensorflow/python/ops/metrics_impl.py#L1094-L1194)) <br>
 <br>
 
-#### 3-6. Try to improve performances of FCN and DeepLab as best as you can
-
-#### 3-7. Discussion on FCN and DeepLab
+#### 3-5. Try to improve performances of FCN and DeepLab as best as you can
+#### 3-6. Discussion on FCN and DeepLab
