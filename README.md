@@ -21,5 +21,5 @@ see `fcn8s_tutorial.ipynb`
 ```
 cp fcn8s_tensorflow.py deeplab_tensorflow.py
 ```
-##### 3-2-2. modify _build_decoder function so that this function builds deeplab instead of fcn
+##### 3-2-2. modify `_build_decoder` function in `deeplab_tensorflow.py` so that this function builds deeplab instead of fcn
 Note: The only thing you need to take care of is to match the dtype and shape of the final output of this function to the one in `fcn8s_tensorflow.py`
