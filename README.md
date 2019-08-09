@@ -46,7 +46,11 @@ from deeplab_tensorflow import FCN8s # replace fcn8s_tensorflow module with deep
 
 #### 3-4. Discussion on FCN and DeepLab
 Implement metrics for per-class iou and compare the performance of FCN with that of DeepLab <br>
-See api for tf.metrics.mean_iou([link](https://www.tensorflow.org/api_docs/python/tf/metrics/mean_iou))
+Please refer to the followings <br>
+(1) `_build_metrics` function [link](https://github.com/1Konny/samsung-ai-expert-semantic-segmentation-project/blob/master/fcn8s_tensorflow.py#L276)
+(2) `_initialize_metrics` function [link](https://github.com/1Konny/samsung-ai-expert-semantic-segmentation-project/blob/master/fcn8s_tensorflow.py#L374)
+(3) api for tf.metrics.mean_iou([link](https://www.tensorflow.org/api_docs/python/tf/metrics/mean_iou))
+(4) tensorflow implementation of tf.metrics.mean_iou([link](https://github.com/tensorflow/tensorflow/tree/r1.14/tensorflow/python/ops/metrics_impl.py#L1094-L1194))
 <br>
 <br>
 
