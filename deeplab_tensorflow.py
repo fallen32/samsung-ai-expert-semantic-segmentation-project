@@ -106,7 +106,7 @@ class FCN8s:
         else: # Load only the pre-trained VGG-16 encoder and build the rest of the graph from scratch.
 
             # Load the pretrained convolutionalized VGG-16 model as our encoder.
-            self.image_input, self.keep_prob, self.pool3_out, self.pool4_out, self.fc7_out = self._load_vgg16()
+            self.image_input, self.keep_prob, self.pool3_out, self.pool4_out, self.conv4_out, self.fc7_out = self._load_vgg16()
             # Build the decoder on top of the VGG-16 encoder.
             self.fcn8s_output, self.l2_regularization_rate = self._build_decoder()
             # Build the part of the graph that is relevant for the training.
@@ -144,19 +144,21 @@ class FCN8s:
         vgg16_keep_prob_tensor_name = 'keep_prob:0'
         vgg16_pool3_out_tensor_name = 'layer3_out:0'
         vgg16_pool4_out_tensor_name = 'layer4_out:0'
+        vgg16_conv4_out_tensor_name = 'conv4_3/Relu:0'
         vgg16_fc7_out_tensor_name = 'layer7_out:0'
 
         image_input = graph.get_tensor_by_name(vgg16_image_input_tensor_name)
         keep_prob = graph.get_tensor_by_name(vgg16_keep_prob_tensor_name)
         pool3_out = graph.get_tensor_by_name(vgg16_pool3_out_tensor_name)
         pool4_out = graph.get_tensor_by_name(vgg16_pool4_out_tensor_name)
+        conv4_out = graph.get_tensor_by_name(vgg16_conv4_out_tensor_name)
         fc7_out = graph.get_tensor_by_name(vgg16_fc7_out_tensor_name)
 
-        return image_input, keep_prob, pool3_out, pool4_out, fc7_out
+        return image_input, keep_prob, pool3_out, pool4_out, conv4_out, fc7_out
 
     def _build_decoder(self):
         '''
-        Builds the FCN-8s decoder given the pool3, pool4, and fc7 outputs of the VGG-16 encoder.
+        Builds the DeepLab V1, Using Atrous convolution from output of conv4_3
         '''
 
         stddev_1x1 = 0.001 # Standard deviation for the 1x1 kernel initializers
@@ -166,78 +168,78 @@ class FCN8s:
 
         with tf.name_scope('decoder'):
 
-            # 1: Append 1x1 convolutions to the three output layers of the encoder to reduce the Number
-            #    of channels to the number of classes.
+            # 1. skip pool4 and use atrous_conv in conv5
 
-            # The outputs of pool3 and pool4 are being scaled in what the authors of
-            # the paper call the at-once training approach.
-            pool3_out_scaled = tf.multiply(self.pool3_out, 0.0001, name='pool3_out_scaled')
+            aconv5_1 = tf.layers.conv2d(inputs=self.conv4_out,
+                                        filters=512,
+                                        kernel_size=(3, 3),
+                                        strides=(1, 1),
+                                        padding='same',
+                                        dilation_rate=2,
+                                        kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                        kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                        name='aconv5_1',
+                                        activation='relu'
+                                        )
 
-            pool3_1x1 = tf.layers.conv2d(inputs=pool3_out_scaled,
-                                         filters=self.num_classes,
-                                         kernel_size=(1, 1),
-                                         strides=(1, 1),
-                                         padding='same',
-                                         kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
-                                         kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                         name='pool3_1x1')
+            aconv5_2 = tf.layers.conv2d(inputs=aconv5_1,
+                                        filters=512,
+                                        kernel_size=(3, 3),
+                                        strides=(1, 1),
+                                        padding='same',
+                                        dilation_rate=2,
+                                        kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                        kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                        name='aconv5_2',
+                                        activation='relu'
+                                        )
 
-            pool4_out_scaled = tf.multiply(self.pool4_out, 0.01, name='pool4_out_scaled')
+            aconv5_3 = tf.layers.conv2d(inputs=aconv5_2,
+                                        filters=512,
+                                        kernel_size=(3, 3),
+                                        strides=(1, 1),
+                                        padding='same',
+                                        dilation_rate=2,
+                                        kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                        kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                        name='aconv5_3',
+                                        activation='relu'
+                                        )
 
-            pool4_1x1 = tf.layers.conv2d(inputs=pool4_out_scaled,
-                                         filters=self.num_classes,
-                                         kernel_size=(1, 1),
-                                         strides=(1, 1),
-                                         padding='same',
-                                         kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
-                                         kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                         name='pool4_1x1')
+            afc6 = tf.layers.conv2d(inputs=aconv5_3,
+                                    filters=1024,
+                                    kernel_size=(7, 7),
+                                    strides=(1, 1),
+                                    padding='same',
+                                    dilation_rate=4,
+                                    kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                    kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                    name='afc6',
+                                    activation='relu',
+                                    )
+            afc6 = tf.layers.dropout(inputs=afc6,
+                                     rate=1-self.keep_prob,
+                                     )
 
-            fc7_1x1 = tf.layers.conv2d(inputs=self.fc7_out,
-                                       filters=self.num_classes,
-                                       kernel_size=(1, 1),
-                                       strides=(1, 1),
-                                       padding='same',
-                                       kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
-                                       kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                       name='fc7_1x1')
+            afc7 = tf.layers.conv2d(inputs=afc6,
+                                    filters=self.num_classes,
+                                    kernel_size=(1, 1),
+                                    strides=(1, 1),
+                                    padding='same',
+                                    dilation_rate=4,
+                                    kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                    kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                    name='afc7',
+                                    activation='relu',
+                                    )
+            afc7 = tf.layers.dropout(inputs=afc7,
+                                     rate=1-self.keep_prob,
+                                     )
 
-            # 2: Upscale and fuse until we're back at the original image size.
+            upsample = tf.keras.layers.UpSampling2D((8, 8), name='upsample')(afc7)
+            fcn8s_output = tf.identity(upsample, name='fcn8s_output')
 
-            fc7_conv2d_trans = tf.layers.conv2d_transpose(inputs=fc7_1x1,
-                                                          filters=self.num_classes,
-                                                          kernel_size=(4, 4),
-                                                          strides=(2, 2),
-                                                          padding='same',
-                                                          kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_conv2d_trans),
-                                                          kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                                          name='fc7_conv2d_trans')
-
-            add_fc7_pool4 = tf.add(fc7_conv2d_trans, pool4_1x1, name='add_fc7_pool4')
-
-            fc7_pool4_conv2d_trans = tf.layers.conv2d_transpose(inputs=add_fc7_pool4,
-                                                                filters=self.num_classes,
-                                                                kernel_size=(4, 4),
-                                                                strides=(2, 2),
-                                                                padding='same',
-                                                                kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_conv2d_trans),
-                                                                kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                                                name='fc7_pool4_conv2d_trans')
-
-            add_fc7_pool4_pool3 = tf.add(fc7_pool4_conv2d_trans, pool3_1x1, name='add_fc7_pool4_pool3')
-
-            fc7_pool4_pool3_conv2d_trans = tf.layers.conv2d_transpose(inputs=add_fc7_pool4_pool3,
-                                                                      filters=self.num_classes,
-                                                                      kernel_size=(16, 16),
-                                                                      strides=(8, 8),
-                                                                      padding='same',
-                                                                      kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_conv2d_trans),
-                                                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                                                      name='fc7_pool4_pool3_conv2d_trans')
-
-            fcn8s_output = tf.identity(fc7_pool4_pool3_conv2d_trans, name='fcn8s_output')
-
-        return fc7_pool4_pool3_conv2d_trans, l2_regularization_rate
+        return upsample, l2_regularization_rate
 
     def _build_optimizer(self):
         '''
@@ -331,26 +333,26 @@ class FCN8s:
 
         graph = tf.get_default_graph()
 
-        add_variable_summaries(variable=graph.get_tensor_by_name('pool3_1x1/kernel:0'), scope='pool3_1x1/kernel')
-        add_variable_summaries(variable=graph.get_tensor_by_name('pool3_1x1/bias:0'), scope='pool3_1x1/bias')
-        add_variable_summaries(variable=graph.get_tensor_by_name('pool4_1x1/kernel:0'), scope='pool4_1x1/kernel')
-        add_variable_summaries(variable=graph.get_tensor_by_name('pool4_1x1/bias:0'), scope='pool4_1x1/bias')
-        add_variable_summaries(variable=graph.get_tensor_by_name('fc7_1x1/kernel:0'), scope='fc7_1x1/kernel')
-        add_variable_summaries(variable=graph.get_tensor_by_name('fc7_1x1/bias:0'), scope='fc7_1x1/bias')
-        add_variable_summaries(variable=graph.get_tensor_by_name('fc7_conv2d_trans/kernel:0'), scope='fc7_conv2d_trans/kernel')
-        add_variable_summaries(variable=graph.get_tensor_by_name('fc7_conv2d_trans/bias:0'), scope='fc7_conv2d_trans/bias')
-        add_variable_summaries(variable=graph.get_tensor_by_name('fc7_pool4_conv2d_trans/kernel:0'), scope='fc7_pool4_conv2d_trans/kernel')
-        add_variable_summaries(variable=graph.get_tensor_by_name('fc7_pool4_conv2d_trans/bias:0'), scope='fc7_pool4_conv2d_trans/bias')
-        add_variable_summaries(variable=graph.get_tensor_by_name('fc7_pool4_pool3_conv2d_trans/kernel:0'), scope='fc7_pool4_pool3_conv2d_trans/kernel')
-        add_variable_summaries(variable=graph.get_tensor_by_name('fc7_pool4_pool3_conv2d_trans/bias:0'), scope='fc7_pool4_pool3_conv2d_trans/bias')
-        add_variable_summaries(variable=graph.get_tensor_by_name('fc7/weights:0'), scope='fc7/kernel')
-        add_variable_summaries(variable=graph.get_tensor_by_name('fc7/biases:0'), scope='fc7/bias')
-        add_variable_summaries(variable=graph.get_tensor_by_name('fc6/weights:0'), scope='fc6/kernel')
-        add_variable_summaries(variable=graph.get_tensor_by_name('fc6/biases:0'), scope='fc6/bias')
-        add_variable_summaries(variable=graph.get_tensor_by_name('conv4_3/filter:0'), scope='conv4_3/kernel')
-        add_variable_summaries(variable=graph.get_tensor_by_name('conv4_3/biases:0'), scope='conv4_3/bias')
-        add_variable_summaries(variable=graph.get_tensor_by_name('conv3_3/filter:0'), scope='conv3_3/kernel')
-        add_variable_summaries(variable=graph.get_tensor_by_name('conv3_3/biases:0'), scope='conv3_3/bias')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('pool3_1x1/kernel:0'), scope='pool3_1x1/kernel')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('pool3_1x1/bias:0'), scope='pool3_1x1/bias')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('pool4_1x1/kernel:0'), scope='pool4_1x1/kernel')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('pool4_1x1/bias:0'), scope='pool4_1x1/bias')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('fc7_1x1/kernel:0'), scope='fc7_1x1/kernel')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('fc7_1x1/bias:0'), scope='fc7_1x1/bias')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('fc7_conv2d_trans/kernel:0'), scope='fc7_conv2d_trans/kernel')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('fc7_conv2d_trans/bias:0'), scope='fc7_conv2d_trans/bias')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('fc7_pool4_conv2d_trans/kernel:0'), scope='fc7_pool4_conv2d_trans/kernel')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('fc7_pool4_conv2d_trans/bias:0'), scope='fc7_pool4_conv2d_trans/bias')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('fc7_pool4_pool3_conv2d_trans/kernel:0'), scope='fc7_pool4_pool3_conv2d_trans/kernel')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('fc7_pool4_pool3_conv2d_trans/bias:0'), scope='fc7_pool4_pool3_conv2d_trans/bias')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('fc7/weights:0'), scope='fc7/kernel')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('fc7/biases:0'), scope='fc7/bias')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('fc6/weights:0'), scope='fc6/kernel')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('fc6/biases:0'), scope='fc6/bias')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('conv4_3/filter:0'), scope='conv4_3/kernel')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('conv4_3/biases:0'), scope='conv4_3/bias')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('conv3_3/filter:0'), scope='conv3_3/kernel')
+        # add_variable_summaries(variable=graph.get_tensor_by_name('conv3_3/biases:0'), scope='conv3_3/bias')
 
         # Loss and learning rate.
         tf.summary.scalar('total_loss', self.total_loss)
