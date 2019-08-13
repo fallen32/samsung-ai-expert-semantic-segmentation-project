@@ -210,40 +210,156 @@ class FCN8s:
 
             pool5_1 = tf.layers.max_pooling2d(inputs=aconv5_3, strides=(1, 1), pool_size=(2, 2), padding='same')
 
-            # 2. Instead of Large FOV, Atrous Spatial Pyramid Pooling is applied
+            # 2. Instead of Large FOV, Atrous Spatial Pyramid Pooling is applied.
+            #    Here, I used ASPP-L is implemented
 
-            afc6 = tf.layers.conv2d(inputs=pool5_1,
-                                    filters=1024,
-                                    kernel_size=(3, 3),
-                                    strides=(1, 1),
-                                    padding='same',
-                                    dilation_rate=12,
-                                    kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
-                                    kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                    name='afc6',
-                                    activation='relu',
-                                    )
+            afc6_1 = tf.layers.conv2d(inputs=pool5_1,
+                                      filters=1024,
+                                      kernel_size=(3, 3),
+                                      strides=(1, 1),
+                                      padding='same',
+                                      dilation_rate=6,
+                                      kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                      name='afc6_1',
+                                      activation='relu',
+                                      )
 
-            afc6 = tf.layers.dropout(inputs=afc6,
-                                     rate=1-self.keep_prob,
-                                     )
+            afc7_1 = tf.layers.conv2d(inputs=afc6_1,
+                                      filters=1024,
+                                      kernel_size=(1, 1),
+                                      strides=(1, 1),
+                                      padding='same',
+                                      dilation_rate=1,
+                                      kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                      name='afc7_1',
+                                      activation='relu',
+                                      )
 
-            afc7 = tf.layers.conv2d(inputs=afc6,
-                                    filters=self.num_classes,
-                                    kernel_size=(1, 1),
-                                    strides=(1, 1),
-                                    padding='same',
-                                    dilation_rate=1,
-                                    kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
-                                    kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                    name='afc7',
-                                    activation='relu',
-                                    )
-            afc7 = tf.layers.dropout(inputs=afc7,
-                                     rate=1-self.keep_prob,
-                                     )
+            afc8_1 = tf.layers.conv2d(inputs=afc7_1,
+                                      filters=self.num_classes,
+                                      kernel_size=(1, 1),
+                                      strides=(1, 1),
+                                      padding='same',
+                                      dilation_rate=1,
+                                      kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                      name='afc8_1',
+                                      activation='relu',
+                                      )
 
-            upsample = tf.keras.layers.UpSampling2D((8, 8), name='upsample')(afc7)
+            afc6_2 = tf.layers.conv2d(inputs=pool5_1,
+                                      filters=1024,
+                                      kernel_size=(3, 3),
+                                      strides=(1, 1),
+                                      padding='same',
+                                      dilation_rate=12,
+                                      kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                      name='afc6_2',
+                                      activation='relu',
+                                      )
+
+            afc7_2 = tf.layers.conv2d(inputs=afc6_2,
+                                      filters=1024,
+                                      kernel_size=(1, 1),
+                                      strides=(1, 1),
+                                      padding='same',
+                                      dilation_rate=1,
+                                      kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                      name='afc7_2',
+                                      activation='relu',
+                                      )
+
+            afc8_2 = tf.layers.conv2d(inputs=afc7_2,
+                                      filters=self.num_classes,
+                                      kernel_size=(1, 1),
+                                      strides=(1, 1),
+                                      padding='same',
+                                      dilation_rate=1,
+                                      kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                      name='afc8_2',
+                                      activation='relu',
+                                      )
+
+            afc6_3 = tf.layers.conv2d(inputs=pool5_1,
+                                      filters=1024,
+                                      kernel_size=(3, 3),
+                                      strides=(1, 1),
+                                      padding='same',
+                                      dilation_rate=18,
+                                      kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                      name='afc6_3',
+                                      activation='relu',
+                                      )
+
+            afc7_3 = tf.layers.conv2d(inputs=afc6_1,
+                                      filters=1024,
+                                      kernel_size=(1, 1),
+                                      strides=(1, 1),
+                                      padding='same',
+                                      dilation_rate=1,
+                                      kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                      name='afc7_3',
+                                      activation='relu',
+                                      )
+
+            afc8_3 = tf.layers.conv2d(inputs=afc7_1,
+                                      filters=self.num_classes,
+                                      kernel_size=(1, 1),
+                                      strides=(1, 1),
+                                      padding='same',
+                                      dilation_rate=1,
+                                      kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                      name='afc8_3',
+                                      activation='relu',
+                                      )
+
+            afc6_4 = tf.layers.conv2d(inputs=pool5_1,
+                                      filters=1024,
+                                      kernel_size=(3, 3),
+                                      strides=(1, 1),
+                                      padding='same',
+                                      dilation_rate=24,
+                                      kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                      name='afc6_4',
+                                      activation='relu',
+                                      )
+
+            afc7_4 = tf.layers.conv2d(inputs=afc6_1,
+                                      filters=1024,
+                                      kernel_size=(1, 1),
+                                      strides=(1, 1),
+                                      padding='same',
+                                      dilation_rate=1,
+                                      kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                      name='afc7_4',
+                                      activation='relu',
+                                      )
+
+            afc8_4 = tf.layers.conv2d(inputs=afc7_1,
+                                      filters=self.num_classes,
+                                      kernel_size=(1, 1),
+                                      strides=(1, 1),
+                                      padding='same',
+                                      dilation_rate=1,
+                                      kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                      name='afc8_4',
+                                      activation='relu',
+                                      )
+
+            logit_small = 0.25 * (afc8_1 + afc8_2 + afc8_2 + afc8_4)    # normalized
+
+            upsample = tf.keras.layers.UpSampling2D((8, 8), name='upsample', interpolation='bilinear')(logit_small)
             fcn8s_output = tf.identity(upsample, name='fcn8s_output')
 
         return upsample, l2_regularization_rate

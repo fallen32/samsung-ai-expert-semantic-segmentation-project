@@ -168,11 +168,9 @@ class FCN8s:
 
         with tf.name_scope('decoder'):
 
-            # 1. stride 1 maxpool4 and use atrous_conv in conv5
+            # 1. skip maxpool4 and use atrous_conv in conv5
 
-            pool4_1 = tf.layers.max_pooling2d(inputs=self.conv4_out, strides=(1, 1), pool_size=(2, 2), padding='same')
-
-            aconv5_1 = tf.layers.conv2d(inputs=pool4_1,
+            aconv5_1 = tf.layers.conv2d(inputs=self.conv4_out,
                                         filters=512,
                                         kernel_size=(3, 3),
                                         strides=(1, 1),
@@ -208,7 +206,7 @@ class FCN8s:
                                         activation='relu'
                                         )
 
-            pool5_1 = tf.layers.max_pooling2d(inputs=aconv5_3, strides=(1, 1), pool_size=(2, 2), padding='same')
+            pool5_1 = tf.layers.max_pooling2d(inputs=aconv5_3, strides=(1, 1), pool_size=(1, 1), padding='same')
 
             # 2. Large FOV is used
 
@@ -224,9 +222,9 @@ class FCN8s:
                                     activation='relu',
                                     )
 
-            afc6 = tf.layers.dropout(inputs=afc6,
-                                     rate=1-self.keep_prob,
-                                     )
+            # afc6 = tf.layers.dropout(inputs=afc6,
+            #                          rate=1-self.keep_prob,
+            #                          )
 
             afc7 = tf.layers.conv2d(inputs=afc6,
                                     filters=1024,
@@ -239,9 +237,9 @@ class FCN8s:
                                     name='afc7',
                                     activation='relu',
                                     )
-            afc7 = tf.layers.dropout(inputs=afc7,
-                                     rate=1-self.keep_prob,
-                                     )
+            # afc7 = tf.layers.dropout(inputs=afc7,
+            #                          rate=1-self.keep_prob,
+            #                          )
 
             afc8 = tf.layers.conv2d(inputs=afc7,
                                     filters=self.num_classes,
@@ -255,7 +253,7 @@ class FCN8s:
                                     activation='relu',
                                     )
 
-            upsample = tf.keras.layers.UpSampling2D((8, 8), name='upsample')(afc8)
+            upsample = tf.keras.layers.UpSampling2D((8, 8), name='upsample', interpolation='bilinear')(afc8)
             fcn8s_output = tf.identity(upsample, name='fcn8s_output')
 
         return upsample, l2_regularization_rate
