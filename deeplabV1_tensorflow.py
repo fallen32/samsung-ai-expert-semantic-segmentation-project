@@ -210,12 +210,14 @@ class FCN8s:
 
             pool5_1 = tf.layers.max_pooling2d(inputs=aconv5_3, strides=(1, 1), pool_size=(2, 2), padding='same')
 
+            # 2. Large FOV is used
+
             afc6 = tf.layers.conv2d(inputs=pool5_1,
                                     filters=1024,
-                                    kernel_size=(7, 7),
+                                    kernel_size=(3, 3),
                                     strides=(1, 1),
                                     padding='same',
-                                    dilation_rate=4,
+                                    dilation_rate=12,
                                     kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
                                     kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
                                     name='afc6',
@@ -231,7 +233,7 @@ class FCN8s:
                                     kernel_size=(1, 1),
                                     strides=(1, 1),
                                     padding='same',
-                                    dilation_rate=4,
+                                    dilation_rate=1,
                                     kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
                                     kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
                                     name='afc7',
