@@ -229,7 +229,7 @@ class FCN8s:
                                      )
 
             afc7 = tf.layers.conv2d(inputs=afc6,
-                                    filters=self.num_classes,
+                                    filters=1024,
                                     kernel_size=(1, 1),
                                     strides=(1, 1),
                                     padding='same',
@@ -243,7 +243,19 @@ class FCN8s:
                                      rate=1-self.keep_prob,
                                      )
 
-            upsample = tf.keras.layers.UpSampling2D((8, 8), name='upsample')(afc7)
+            afc8 = tf.layers.conv2d(inputs=afc7,
+                                    filters=self.num_classes,
+                                    kernel_size=(1, 1),
+                                    strides=(1, 1),
+                                    padding='same',
+                                    dilation_rate=1,
+                                    kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                    kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                    name='afc8',
+                                    activation='relu',
+                                    )
+
+            upsample = tf.keras.layers.UpSampling2D((8, 8), name='upsample')(afc8)
             fcn8s_output = tf.identity(upsample, name='fcn8s_output')
 
         return upsample, l2_regularization_rate
