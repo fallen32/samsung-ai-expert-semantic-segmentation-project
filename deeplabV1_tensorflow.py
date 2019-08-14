@@ -301,7 +301,6 @@ class FCN8s:
         with tf.variable_scope('metrics') as scope:
 
             labels_argmax = tf.argmax(self.labels, axis=-1, name='labels_argmax', output_type=tf.int64)
-            self.labels_argmex = labels_argmax
 
             # 1: Mean loss
 
@@ -640,8 +639,8 @@ class FCN8s:
                 if save_best_only:
                     if (monitor == 'loss' and
                         (not 'loss' in self.metric_names) and
-                        self.training_loss < self.best_training_loss):
-                        save = True
+                         self.training_loss < self.best_training_loss):
+                         save = True
                     else:
                         i = self.metric_names.index(monitor)
                         if (monitor == 'loss') and (self.metric_values[i] < self.best_metric_values[i]):
@@ -717,24 +716,17 @@ class FCN8s:
                                      self.keep_prob: 1.0,
                                      self.l2_regularization_rate: l2_regularization})
 
+            # Added for per-class IoU
             labels_argmax = tf.argmax(self.labels, axis=-1, name='labels_argmax', output_type=tf.int64)
-            # labels, predictions = self.sess.run([labels_argmax, self.predictions_argmax],
-            #                                     feed_dict={self.image_input: batch_images,
-            #                                                self.labels: batch_labels,
-            #                                                self.keep_prob: 1.0,
-            #                                                self.l2_regularization_rate: l2_regularization})
-
-            cur_iou_class = test.iou_class(labels_argmax, self.predictions_argmax, 4)
-            per_class = tf.add(cur_iou_class, per_class)
-            non_zero = tf.add(non_zero, tf.ceil(cur_iou_class))
-
-        val_per_class = per_class / (non_zero + 1e-6)
+            cur_iou_class = test.iou_class(labels_argmax, self.predictions_argmax)
+            per_class = per_class + cur_iou_class
         # Compute final metric values.
+        final_per_class = tf.div(per_class, step + 1)
         self.metric_values = self.sess.run(self.metric_value_tensors)
-        self.per_class_iou = self.sess.run(val_per_class, feed_dict={self.image_input: batch_images,
-                                                                     self.labels: batch_labels,
-                                                                     self.keep_prob: 1.0,
-                                                                     self.l2_regularization_rate: l2_regularization})
+        self.per_class_iou = self.sess.run(final_per_class, feed_dict={self.image_input: batch_images,
+                                                                       self.labels: batch_labels,
+                                                                       self.keep_prob: 1.0,
+                                                                       self.l2_regularization_rate: l2_regularization})
         evaluation_results_string = ''
         for i, metric_name in enumerate(self.metric_names):
             evaluation_results_string += metric_name + ': {:.4f}  '.format(self.metric_values[i])
