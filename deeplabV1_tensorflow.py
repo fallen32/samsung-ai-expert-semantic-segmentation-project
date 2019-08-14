@@ -176,7 +176,7 @@ class FCN8s:
                                         strides=(1, 1),
                                         padding='same',
                                         dilation_rate=2,
-                                        kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                        kernel_initializer=tf.glorot_normal_initializer(),
                                         kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
                                         name='aconv5_1',
                                         activation='relu'
@@ -188,7 +188,7 @@ class FCN8s:
                                         strides=(1, 1),
                                         padding='same',
                                         dilation_rate=2,
-                                        kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                        kernel_initializer=tf.glorot_normal_initializer(),
                                         kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
                                         name='aconv5_2',
                                         activation='relu'
@@ -200,7 +200,7 @@ class FCN8s:
                                         strides=(1, 1),
                                         padding='same',
                                         dilation_rate=2,
-                                        kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                        kernel_initializer=tf.glorot_normal_initializer(),
                                         kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
                                         name='aconv5_3',
                                         activation='relu'
@@ -215,8 +215,8 @@ class FCN8s:
                                     kernel_size=(3, 3),
                                     strides=(1, 1),
                                     padding='same',
-                                    dilation_rate=12,
-                                    kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                    dilation_rate=6,
+                                    kernel_initializer=tf.glorot_normal_initializer(),
                                     kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
                                     name='afc6',
                                     activation='relu',
@@ -232,7 +232,7 @@ class FCN8s:
                                     strides=(1, 1),
                                     padding='same',
                                     dilation_rate=1,
-                                    kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                    kernel_initializer=tf.glorot_normal_initializer(),
                                     kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
                                     name='afc7',
                                     activation='relu',
@@ -247,7 +247,7 @@ class FCN8s:
                                     strides=(1, 1),
                                     padding='same',
                                     dilation_rate=1,
-                                    kernel_initializer=tf.truncated_normal_initializer(stddev=stddev_1x1),
+                                    kernel_initializer=tf.glorot_normal_initializer(),
                                     kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
                                     name='afc8',
                                     activation='relu',
@@ -309,7 +309,6 @@ class FCN8s:
             mean_loss_update_op = tf.identity(mean_loss_update_op, name='mean_loss_update_op')
 
             # 1: Mean IoU
-
             mean_iou_value, mean_iou_update_op = tf.metrics.mean_iou(labels=labels_argmax,
                                                                      predictions=self.predictions_argmax,
                                                                      num_classes=self.num_classes)
