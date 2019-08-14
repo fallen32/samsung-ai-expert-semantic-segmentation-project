@@ -10,6 +10,7 @@ from glob import glob
 from collections import deque
 import numpy as np
 import time
+from metric_iou import IOU
 
 from helpers.tf_variable_summaries import add_variable_summaries
 from helpers.visualization_utils import print_segmentation_onto_image, create_split_view
@@ -300,6 +301,7 @@ class FCN8s:
         with tf.variable_scope('metrics') as scope:
 
             labels_argmax = tf.argmax(self.labels, axis=-1, name='labels_argmax', output_type=tf.int64)
+            self.labels_argmex = labels_argmax
 
             # 1: Mean loss
 
@@ -693,10 +695,16 @@ class FCN8s:
 
         # Reset all metrics' accumulator variables.
         self.sess.run(self.metrics_reset_op)
+        per_class = tf.zeros(self.num_classes)
+        non_zero = tf.zeros(self.num_classes)
 
         # Set up the progress bar.
         tr = trange(num_batches, file=sys.stdout)
         tr.set_description(description)
+
+        # save Per-class IoU for current epoch per batch
+        # 3: per-class IoU
+        test = IOU(self.num_classes)
 
         # Accumulate metrics in batches.
         for step in tr:
@@ -709,13 +717,31 @@ class FCN8s:
                                      self.keep_prob: 1.0,
                                      self.l2_regularization_rate: l2_regularization})
 
+            labels_argmax = tf.argmax(self.labels, axis=-1, name='labels_argmax', output_type=tf.int64)
+            # labels, predictions = self.sess.run([labels_argmax, self.predictions_argmax],
+            #                                     feed_dict={self.image_input: batch_images,
+            #                                                self.labels: batch_labels,
+            #                                                self.keep_prob: 1.0,
+            #                                                self.l2_regularization_rate: l2_regularization})
+
+            cur_iou_class = test.iou_class(labels_argmax, self.predictions_argmax, 4)
+            per_class = tf.add(cur_iou_class, per_class)
+            non_zero = tf.add(non_zero, tf.ceil(cur_iou_class))
+
+        val_per_class = per_class / (non_zero + 1e-6)
         # Compute final metric values.
         self.metric_values = self.sess.run(self.metric_value_tensors)
-
+        self.per_class_iou = self.sess.run(val_per_class, feed_dict={self.image_input: batch_images,
+                                                                     self.labels: batch_labels,
+                                                                     self.keep_prob: 1.0,
+                                                                     self.l2_regularization_rate: l2_regularization})
         evaluation_results_string = ''
         for i, metric_name in enumerate(self.metric_names):
             evaluation_results_string += metric_name + ': {:.4f}  '.format(self.metric_values[i])
         print(evaluation_results_string)
+
+        print('per_class_iou: ')
+        print(*self.per_class_iou, sep=', ')
 
     def evaluate(self, data_generator, num_batches, metrics={'loss', 'mean_iou', 'accuracy'}, l2_regularization=0.0, dataset='val'):
         '''
