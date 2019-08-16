@@ -219,7 +219,7 @@ class FCN8s:
                                       kernel_size=(3, 3),
                                       strides=(1, 1),
                                       padding='same',
-                                      dilation_rate=6,
+                                      dilation_rate=2,
                                       kernel_initializer=tf.glorot_normal_initializer(),
                                       kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
                                       name='afc6_1',
@@ -255,7 +255,7 @@ class FCN8s:
                                       kernel_size=(3, 3),
                                       strides=(1, 1),
                                       padding='same',
-                                      dilation_rate=12,
+                                      dilation_rate=4,
                                       kernel_initializer=tf.glorot_normal_initializer(),
                                       kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
                                       name='afc6_2',
@@ -291,7 +291,7 @@ class FCN8s:
                                       kernel_size=(3, 3),
                                       strides=(1, 1),
                                       padding='same',
-                                      dilation_rate=18,
+                                      dilation_rate=8,
                                       kernel_initializer=tf.glorot_normal_initializer(),
                                       kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
                                       name='afc6_3',
@@ -327,7 +327,7 @@ class FCN8s:
                                       kernel_size=(3, 3),
                                       strides=(1, 1),
                                       padding='same',
-                                      dilation_rate=24,
+                                      dilation_rate=12,
                                       kernel_initializer=tf.glorot_normal_initializer(),
                                       kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
                                       name='afc6_4',
@@ -834,17 +834,20 @@ class FCN8s:
                                                                        self.keep_prob: 1.0,
                                                                        self.l2_regularization_rate: l2_regularization})
 
+        # further class IDs are not used ref:cityscapesscripts/helper/labels.py
+        self.per_class_iou = self.per_class_iou[:20]
+
         # Compute final metric values.
         self.metric_values = self.sess.run(self.metric_value_tensors)
 
         evaluation_results_string = ''
         for i, metric_name in enumerate(self.metric_names):
-            evaluation_results_string += metric_name + ': {:.4f}'.format(self.metric_values[i])
+            evaluation_results_string += metric_name + ': {:.4f}  '.format(self.metric_values[i])
         print(evaluation_results_string)
 
         labels_strs = test.iou_label_list()
         for (labels_str, iou) in zip(labels_strs, self.per_class_iou):
-            print(labels_str+": "+"{:.4f}".format(iou))
+            print(labels_str+": "+".4f".format(iou))
 
     def evaluate(self, data_generator, num_batches, metrics={'loss', 'mean_iou', 'accuracy'}, l2_regularization=0.0, dataset='val'):
         '''

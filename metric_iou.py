@@ -34,3 +34,10 @@ class IOU:
         iou = tf.div(intersection, union)
 
         return iou
+
+    def iou_label_list(self):
+        labels = ['Unknown', 'Road', 'Sidewalk', 'Building', 'Wall', 'Fence', 'Pole', 'Traffic light',
+                  'Traffic Sign', 'Vegetation', 'Terrain', 'Sky', 'Person', 'Rider', 'Car', 'Truck', 'Bus',
+                  'Train', 'Motorcycle', 'Bicycle']
+
+        return labels

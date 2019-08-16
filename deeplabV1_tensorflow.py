@@ -695,7 +695,6 @@ class FCN8s:
         # Reset all metrics' accumulator variables.
         self.sess.run(self.metrics_reset_op)
         per_class = tf.zeros(self.num_classes)
-        non_zero = tf.zeros(self.num_classes)
 
         # Set up the progress bar.
         tr = trange(num_batches, file=sys.stdout)

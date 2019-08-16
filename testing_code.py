@@ -151,4 +151,8 @@ result = self.sess.run(per_class, feed_dict={self.image_input: batch_images,
                                                       self.learning_rate: learning_rate,
                                                       self.keep_prob: keep_prob,
                                                       self.l2_regularization_rate: l2_regularization})
+                                                      
+a, b, c, d = self.sess.run([cur_iou_class, union, num_valid, intersection], feed_dict={self.image_input: batch_images,
+                                                      self.labels: batch_labels,
+                                                      self.keep_prob: 1.0})  
 """
