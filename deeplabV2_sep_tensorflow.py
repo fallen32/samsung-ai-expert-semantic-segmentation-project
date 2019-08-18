@@ -298,7 +298,7 @@ class FCN8s:
                                       activation='relu',
                                       )
 
-            afc7_3 = tf.layers.conv2d(inputs=afc6_3,
+            afc7_3 = tf.layers.conv2d(inputs=afc6_1,
                                       filters=1024,
                                       kernel_size=(1, 1),
                                       strides=(1, 1),
@@ -310,7 +310,7 @@ class FCN8s:
                                       activation='relu',
                                       )
 
-            afc8_3 = tf.layers.conv2d(inputs=afc7_3,
+            afc8_3 = tf.layers.conv2d(inputs=afc7_1,
                                       filters=self.num_classes,
                                       kernel_size=(1, 1),
                                       strides=(1, 1),
@@ -334,7 +334,7 @@ class FCN8s:
                                       activation='relu',
                                       )
 
-            afc7_4 = tf.layers.conv2d(inputs=afc6_4,
+            afc7_4 = tf.layers.conv2d(inputs=afc6_1,
                                       filters=1024,
                                       kernel_size=(1, 1),
                                       strides=(1, 1),
@@ -346,7 +346,7 @@ class FCN8s:
                                       activation='relu',
                                       )
 
-            afc8_4 = tf.layers.conv2d(inputs=afc7_4,
+            afc8_4 = tf.layers.conv2d(inputs=afc7_1,
                                       filters=self.num_classes,
                                       kernel_size=(1, 1),
                                       strides=(1, 1),
