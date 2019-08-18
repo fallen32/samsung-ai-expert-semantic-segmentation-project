@@ -801,7 +801,7 @@ class FCN8s:
 
         # Reset all metrics' accumulator variables.
         self.sess.run(self.metrics_reset_op)
-        per_class = tf.zeros(self.num_classes)
+        running_confusion = tf.zeros([self.num_classes, self.num_classes])
 
         # Set up the progress bar.
         tr = trange(num_batches, file=sys.stdout)
@@ -824,21 +824,20 @@ class FCN8s:
 
             # Added for per-class IoU
             labels_argmax = tf.argmax(self.labels, axis=-1, name='labels_argmax', output_type=tf.int64)
-            cur_iou_class = test.iou_class(labels_argmax, self.predictions_argmax)
-            per_class = per_class + cur_iou_class
+            cur_confusion = self.sess.run(tf.cast(test.calc_batch_cm(labels_argmax, self.predictions_argmax), tf.float32),
+                                          feed_dict={self.image_input: batch_images,
+                                                     self.labels: batch_labels,
+                                                     self.keep_prob: 1.0,
+                                                     self.l2_regularization_rate: l2_regularization})
+            running_confusion = running_confusion + cur_confusion
+
         # Compute final metric values.
-        final_per_class = tf.div(per_class, step + 1)
+        running_iou = test.iou_class(confusion_matrix=running_confusion)
         self.metric_values = self.sess.run(self.metric_value_tensors)
-        self.per_class_iou = self.sess.run(final_per_class, feed_dict={self.image_input: batch_images,
-                                                                       self.labels: batch_labels,
-                                                                       self.keep_prob: 1.0,
-                                                                       self.l2_regularization_rate: l2_regularization})
+        self.per_class_iou = self.sess.run(running_iou)
 
         # further class IDs are not used ref:cityscapesscripts/helper/labels.py
         self.per_class_iou = self.per_class_iou[:20]
-
-        # Compute final metric values.
-        self.metric_values = self.sess.run(self.metric_value_tensors)
 
         evaluation_results_string = ''
         for i, metric_name in enumerate(self.metric_names):
@@ -847,7 +846,7 @@ class FCN8s:
 
         labels_strs = test.iou_label_list()
         for (labels_str, iou) in zip(labels_strs, self.per_class_iou):
-            print(labels_str+": "+".4f".format(iou))
+            print(labels_str+": "+"{:.4f}".format(iou))
 
     def evaluate(self, data_generator, num_batches, metrics={'loss', 'mean_iou', 'accuracy'}, l2_regularization=0.0, dataset='val'):
         '''
