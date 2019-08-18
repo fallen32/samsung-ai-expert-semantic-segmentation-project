@@ -840,7 +840,7 @@ class FCN8s:
         # further class IDs are not used ref:cityscapesscripts/helper/labels.py
         self.per_class_iou = self.per_class_iou[:20]
 
-        evaluation_results_string = ''
+        evaluation_results_string = ' '
         for i, metric_name in enumerate(self.metric_names):
             evaluation_results_string += metric_name + ': {:.4f}'.format(self.metric_values[i])
         print(evaluation_results_string)
