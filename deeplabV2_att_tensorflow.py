@@ -11,6 +11,7 @@ from collections import deque
 import numpy as np
 import time
 from metric_iou import IOU
+import per_iou
 
 from helpers.tf_variable_summaries import add_variable_summaries
 from helpers.visualization_utils import print_segmentation_onto_image, create_split_view
@@ -116,7 +117,8 @@ class FCN8s:
             # Add the prediction outputs.
             self.softmax_output, self.predictions_argmax = self._build_predictor()
             # Add metrics for evaluation.
-            self.mean_loss_value, self.mean_loss_update_op, self.mean_iou_value, self.mean_iou_update_op, self.acc_value, self.acc_update_op, self.metrics_reset_op = self._build_metrics()
+            self.mean_loss_value, self.mean_loss_update_op, self.mean_iou_value, self.mean_iou_update_op, \
+            self.acc_value, self.acc_update_op, self.iou_value, self.iou_update_op, self.metrics_reset_op = self._build_metrics()
             # Add summary ops for TensorBoard.
             self.summaries_training, self.summaries_evaluation = self._build_summary_ops()
             # Initialize the global and local (for the metrics) variables.
@@ -173,190 +175,187 @@ class FCN8s:
 
             pool4_1 = tf.layers.max_pooling2d(inputs=self.conv4_out, strides=(1, 1), pool_size=(2, 2), padding='same')
 
-            aconv5_1 = tf.layers.conv2d(inputs=pool4_1,
-                                        filters=512,
-                                        kernel_size=(3, 3),
-                                        strides=(1, 1),
-                                        padding='same',
-                                        dilation_rate=2,
-                                        kernel_initializer=tf.glorot_normal_initializer(),
-                                        kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                        name='aconv5_1',
-                                        activation='relu'
-                                        )
+            aconv5_1 = tf.keras.layers.Conv2D(filters=512,
+                                                 kernel_size=(3, 3),
+                                                 strides=(1, 1),
+                                                 padding='same',
+                                                 dilation_rate=2,
+                                                 kernel_initializer=tf.glorot_normal_initializer(),
+                                                 kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                                 name='aconv5_1',
+                                                 activation='relu'
+                                                 )(pool4_1)
 
-            aconv5_2 = tf.layers.conv2d(inputs=aconv5_1,
-                                        filters=512,
-                                        kernel_size=(3, 3),
-                                        strides=(1, 1),
-                                        padding='same',
-                                        dilation_rate=2,
-                                        kernel_initializer=tf.glorot_normal_initializer(),
-                                        kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                        name='aconv5_2',
-                                        activation='relu'
-                                        )
+            aconv5_2 = tf.keras.layers.Conv2D(filters=512,
+                                                 kernel_size=(3, 3),
+                                                 strides=(1, 1),
+                                                 padding='same',
+                                                 dilation_rate=2,
+                                                 kernel_initializer=tf.glorot_normal_initializer(),
+                                                 kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                                 name='aconv5_2',
+                                                 activation='relu'
+                                                 )(aconv5_1)
 
-            aconv5_3 = tf.layers.conv2d(inputs=aconv5_2,
-                                        filters=512,
-                                        kernel_size=(3, 3),
-                                        strides=(1, 1),
-                                        padding='same',
-                                        dilation_rate=2,
-                                        kernel_initializer=tf.glorot_normal_initializer(),
-                                        kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                        name='aconv5_3',
-                                        activation='relu'
-                                        )
+            aconv5_3 = tf.keras.layers.Conv2D(filters=512,
+                                                 kernel_size=(3, 3),
+                                                 strides=(1, 1),
+                                                 padding='same',
+                                                 dilation_rate=2,
+                                                 kernel_initializer=tf.glorot_normal_initializer(),
+                                                 kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                                 name='aconv5_3',
+                                                 activation='relu'
+                                                 )(aconv5_2)
 
             pool5_1 = tf.layers.max_pooling2d(inputs=aconv5_3, strides=(1, 1), pool_size=(2, 2), padding='same')
 
             # 2. Instead of Large FOV, Atrous Spatial Pyramid Pooling is applied.
             #    Here, I used ASPP-L is implemented
 
-            afc6_1 = tf.layers.conv2d(inputs=pool5_1,
-                                      filters=1024,
-                                      kernel_size=(3, 3),
-                                      strides=(1, 1),
-                                      padding='same',
-                                      dilation_rate=6,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                      name='afc6_1',
-                                      activation='relu',
-                                      )
+            afc6_1 = tf.keras.layers.SeparableConv2D(
+                                               filters=1024,
+                                               kernel_size=(3, 3),
+                                               strides=(1, 1),
+                                               padding='same',
+                                               dilation_rate=6,
+                                               depthwise_initializer=tf.glorot_normal_initializer(),
+                                               depthwise_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                               name='afc6_1',
+                                               activation='relu',
+                                               )(pool5_1)
 
-            afc7_1 = tf.layers.conv2d(inputs=afc6_1,
-                                      filters=1024,
-                                      kernel_size=(1, 1),
-                                      strides=(1, 1),
-                                      padding='same',
-                                      dilation_rate=1,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                      name='afc7_1',
-                                      activation='relu',
-                                      )
+            afc7_1 = tf.keras.layers.Conv2D(
+                                           filters=1024,
+                                           kernel_size=(1, 1),
+                                           strides=(1, 1),
+                                           padding='same',
+                                           dilation_rate=1,
+                                           kernel_initializer=tf.glorot_normal_initializer(),
+                                           kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                           name='afc7_1',
+                                           activation='relu',
+                                           )(afc6_1)
 
-            afc8_1 = tf.layers.conv2d(inputs=afc7_1,
-                                      filters=self.num_classes,
-                                      kernel_size=(1, 1),
-                                      strides=(1, 1),
-                                      padding='same',
-                                      dilation_rate=1,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                      name='afc8_1',
-                                      activation='relu',
-                                      )
+            afc8_1 = tf.keras.layers.Conv2D(
+                                           filters=self.num_classes,
+                                           kernel_size=(1, 1),
+                                           strides=(1, 1),
+                                           padding='same',
+                                           dilation_rate=1,
+                                           kernel_initializer=tf.glorot_normal_initializer(),
+                                           kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                           name='afc8_1',
+                                           activation='relu',
+                                           )(afc7_1)
 
-            afc6_2 = tf.layers.conv2d(inputs=pool5_1,
-                                      filters=1024,
-                                      kernel_size=(3, 3),
-                                      strides=(1, 1),
-                                      padding='same',
-                                      dilation_rate=12,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                      name='afc6_2',
-                                      activation='relu',
-                                      )
+            afc6_2 = tf.keras.layers.SeparableConv2D(
+                                               filters=1024,
+                                               kernel_size=(3, 3),
+                                               strides=(1, 1),
+                                               padding='same',
+                                               dilation_rate=12,
+                                               depthwise_initializer=tf.glorot_normal_initializer(),
+                                               depthwise_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                               name='afc6_2',
+                                               activation='relu',
+                                               )(pool5_1)
 
-            afc7_2 = tf.layers.conv2d(inputs=afc6_2,
-                                      filters=1024,
-                                      kernel_size=(1, 1),
-                                      strides=(1, 1),
-                                      padding='same',
-                                      dilation_rate=1,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                      name='afc7_2',
-                                      activation='relu',
-                                      )
+            afc7_2 = tf.keras.layers.Conv2D(
+                                           filters=1024,
+                                           kernel_size=(1, 1),
+                                           strides=(1, 1),
+                                           padding='same',
+                                           dilation_rate=1,
+                                           kernel_initializer=tf.glorot_normal_initializer(),
+                                           kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                           name='afc7_2',
+                                           activation='relu',
+                                           )(afc6_2)
 
-            afc8_2 = tf.layers.conv2d(inputs=afc7_2,
-                                      filters=self.num_classes,
-                                      kernel_size=(1, 1),
-                                      strides=(1, 1),
-                                      padding='same',
-                                      dilation_rate=1,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                      name='afc8_2',
-                                      activation='relu',
-                                      )
+            afc8_2 = tf.keras.layers.Conv2D(
+                                           filters=self.num_classes,
+                                           kernel_size=(1, 1),
+                                           strides=(1, 1),
+                                           padding='same',
+                                           dilation_rate=1,
+                                           kernel_initializer=tf.glorot_normal_initializer(),
+                                           kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                           name='afc8_2',
+                                           activation='relu',
+                                           )(afc7_2)
 
-            afc6_3 = tf.layers.conv2d(inputs=pool5_1,
-                                      filters=1024,
-                                      kernel_size=(3, 3),
-                                      strides=(1, 1),
-                                      padding='same',
-                                      dilation_rate=18,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                      name='afc6_3',
-                                      activation='relu',
-                                      )
+            afc6_3 = tf.keras.layers.SeparableConv2D(
+                                               filters=1024,
+                                               kernel_size=(3, 3),
+                                               strides=(1, 1),
+                                               padding='same',
+                                               dilation_rate=18,
+                                               depthwise_initializer=tf.glorot_normal_initializer(),
+                                               depthwise_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                               name='afc6_3',
+                                               activation='relu',
+                                               )(pool5_1)
 
-            afc7_3 = tf.layers.conv2d(inputs=afc6_3,
-                                      filters=1024,
-                                      kernel_size=(1, 1),
-                                      strides=(1, 1),
-                                      padding='same',
-                                      dilation_rate=1,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                      name='afc7_3',
-                                      activation='relu',
-                                      )
+            afc7_3 = tf.keras.layers.Conv2D(
+                                           filters=1024,
+                                           kernel_size=(1, 1),
+                                           strides=(1, 1),
+                                           padding='same',
+                                           dilation_rate=1,
+                                           kernel_initializer=tf.glorot_normal_initializer(),
+                                           kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                           name='afc7_3',
+                                           activation='relu',
+                                           )(afc6_3)
 
-            afc8_3 = tf.layers.conv2d(inputs=afc7_3,
-                                      filters=self.num_classes,
-                                      kernel_size=(1, 1),
-                                      strides=(1, 1),
-                                      padding='same',
-                                      dilation_rate=1,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                      name='afc8_3',
-                                      activation='relu',
-                                      )
+            afc8_3 = tf.keras.layers.Conv2D(
+                                           filters=self.num_classes,
+                                           kernel_size=(1, 1),
+                                           strides=(1, 1),
+                                           padding='same',
+                                           dilation_rate=1,
+                                           kernel_initializer=tf.glorot_normal_initializer(),
+                                           kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                           name='afc8_3',
+                                           activation='relu',
+                                           )(afc7_3)
 
-            afc6_4 = tf.layers.conv2d(inputs=pool5_1,
-                                      filters=1024,
-                                      kernel_size=(3, 3),
-                                      strides=(1, 1),
-                                      padding='same',
-                                      dilation_rate=24,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                      name='afc6_4',
-                                      activation='relu',
-                                      )
+            afc6_4 = tf.keras.layers.SeparableConv2D(
+                                               filters=1024,
+                                               kernel_size=(3, 3),
+                                               strides=(1, 1),
+                                               padding='same',
+                                               dilation_rate=24,
+                                               depthwise_initializer=tf.glorot_normal_initializer(),
+                                               depthwise_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                               name='afc6_4',
+                                               activation='relu',
+                                               )(pool5_1)
 
-            afc7_4 = tf.layers.conv2d(inputs=afc6_4,
-                                      filters=1024,
-                                      kernel_size=(1, 1),
-                                      strides=(1, 1),
-                                      padding='same',
-                                      dilation_rate=1,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                      name='afc7_4',
-                                      activation='relu',
-                                      )
+            afc7_4 = tf.keras.layers.Conv2D(
+                                           filters=1024,
+                                           kernel_size=(1, 1),
+                                           strides=(1, 1),
+                                           padding='same',
+                                           dilation_rate=1,
+                                           kernel_initializer=tf.glorot_normal_initializer(),
+                                           kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                           name='afc7_4',
+                                           activation='relu',
+                                           )(afc6_4)
 
-            afc8_4 = tf.layers.conv2d(inputs=afc7_4,
-                                      filters=self.num_classes,
-                                      kernel_size=(1, 1),
-                                      strides=(1, 1),
-                                      padding='same',
-                                      dilation_rate=1,
-                                      kernel_initializer=tf.glorot_normal_initializer(),
-                                      kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
-                                      name='afc8_4',
-                                      activation='relu',
-                                      )
+            afc8_4 = tf.keras.layers.Conv2D(
+                                           filters=self.num_classes,
+                                           kernel_size=(1, 1),
+                                           strides=(1, 1),
+                                           padding='same',
+                                           dilation_rate=1,
+                                           kernel_initializer=tf.glorot_normal_initializer(),
+                                           kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                           name='afc8_4',
+                                           activation='relu',
+                                           )(afc7_4)
 
             logit_small = 0.25 * (afc8_1 + afc8_2 + afc8_3 + afc8_4)    # normalized
 
@@ -432,6 +431,12 @@ class FCN8s:
             acc_value = tf.identity(acc_value, name='acc_value')
             acc_update_op = tf.identity(acc_update_op, name='acc_update_op')
 
+            # 3: per class IoU
+
+            iou_value, iou_update_op = per_iou.per_class_iou(labels=labels_argmax,
+                                                             predictions=self.predictions_argmax,
+                                                             num_classes=self.num_classes)
+
             # As of version 1.3, TensorFlow's streaming metrics don't have reset operations,
             # so we need to create our own as a work-around. Say we want to evaluate
             # a metric after every training epoch. If we didn't have
@@ -448,6 +453,8 @@ class FCN8s:
                 mean_iou_update_op,
                 acc_value,
                 acc_update_op,
+                iou_value,
+                iou_update_op,
                 metrics_reset_op)
 
     def _build_summary_ops(self):
@@ -524,6 +531,11 @@ class FCN8s:
             self.best_metric_values.append(0.0)
             self.metric_update_ops.append(self.acc_update_op)
             self.metric_value_tensors.append(self.acc_value)
+
+        # save Per-class IoU for current epoch per batch
+        # 3: per-class IoU
+        self.metric_update_ops.append(self.iou_update_op)
+        self.metric_value_tensors.append(self.iou_value)
 
     def train(self,
               train_generator,
@@ -801,15 +813,15 @@ class FCN8s:
 
         # Reset all metrics' accumulator variables.
         self.sess.run(self.metrics_reset_op)
-        running_confusion = tf.zeros([self.num_classes, self.num_classes])
+        # with tf.variable_scope("confusion", reuse=tf.AUTO_REUSE):
+        #     running_confusion = tf.get_variable(shape=[self.num_classes, self.num_classes],
+        #                                         initializer=tf.zeros_initializer, name='confusion_matrix',
+        #                                         trainable=False)
+        # self.sess.run(running_confusion.initializer)
 
         # Set up the progress bar.
         tr = trange(num_batches, file=sys.stdout)
         tr.set_description(description)
-
-        # save Per-class IoU for current epoch per batch
-        # 3: per-class IoU
-        test = IOU(self.num_classes)
 
         # Accumulate metrics in batches.
         # Accumulate metrics in batches.
@@ -817,35 +829,27 @@ class FCN8s:
 
             batch_images, batch_labels = next(data_generator)
 
+            # Added for per-class IoU
+            labels_argmax = tf.argmax(self.labels, axis=-1, name='labels_argmax', output_type=tf.int64)
+            # cur_confusion = tf.cast(self.test.calc_batch_cm(labels_argmax, self.predictions_argmax), tf.float32)
             self.sess.run(self.metric_update_ops,
                           feed_dict={self.image_input: batch_images,
                                      self.labels: batch_labels,
                                      self.keep_prob: 1.0,
                                      self.l2_regularization_rate: l2_regularization})
 
-            # Added for per-class IoU
-            labels_argmax = tf.argmax(self.labels, axis=-1, name='labels_argmax', output_type=tf.int64)
-            cur_confusion = self.sess.run(tf.cast(test.calc_batch_cm(labels_argmax, self.predictions_argmax), tf.float32),
-                                          feed_dict={self.image_input: batch_images,
-                                                     self.labels: batch_labels,
-                                                     self.keep_prob: 1.0,
-                                                     self.l2_regularization_rate: l2_regularization})
-            running_confusion = running_confusion + cur_confusion
-
         # Compute final metric values.
-        running_iou = test.iou_class(confusion_matrix=running_confusion)
         self.metric_values = self.sess.run(self.metric_value_tensors)
-        self.per_class_iou = self.sess.run(running_iou)
 
         # further class IDs are not used ref:cityscapesscripts/helper/labels.py
-        self.per_class_iou = self.per_class_iou[:20]
+        self.per_class_iou = self.metric_values[3][:20]
 
         evaluation_results_string = ' '
         for i, metric_name in enumerate(self.metric_names):
             evaluation_results_string += metric_name + ': {:.4f} '.format(self.metric_values[i])
         print(evaluation_results_string)
 
-        labels_strs = test.iou_label_list()
+        labels_strs = self.test.iou_label_list()
         for (labels_str, iou) in zip(labels_strs, self.per_class_iou):
             print(labels_str+": "+"{:.4f}".format(iou))
 

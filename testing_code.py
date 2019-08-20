@@ -1,4 +1,4 @@
-from deeplabV2_s_tensorflow import FCN8s
+from deeplabV2_sep_tensorflow import FCN8s
 from data_generator.batch_generator import BatchGenerator
 from helpers.visualization_utils import print_segmentation_onto_image, create_video_from_images
 from cityscapesscripts.helpers.labels import TRAINIDS_TO_COLORS_DICT, TRAINIDS_TO_RGBA_DICT

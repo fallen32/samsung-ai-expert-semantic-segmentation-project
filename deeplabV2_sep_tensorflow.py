@@ -11,6 +11,7 @@ from collections import deque
 import numpy as np
 import time
 from metric_iou import IOU
+import per_iou
 
 from helpers.tf_variable_summaries import add_variable_summaries
 from helpers.visualization_utils import print_segmentation_onto_image, create_split_view
@@ -69,6 +70,8 @@ class FCN8s:
         self.sess = tf.Session(config=config)
         self.g_step = None # The global step
 
+        self.test = IOU(self.num_classes)
+
         ##################################################################
         # Load or build the model.
         ##################################################################
@@ -116,7 +119,8 @@ class FCN8s:
             # Add the prediction outputs.
             self.softmax_output, self.predictions_argmax = self._build_predictor()
             # Add metrics for evaluation.
-            self.mean_loss_value, self.mean_loss_update_op, self.mean_iou_value, self.mean_iou_update_op, self.acc_value, self.acc_update_op, self.metrics_reset_op = self._build_metrics()
+            self.mean_loss_value, self.mean_loss_update_op, self.mean_iou_value, self.mean_iou_update_op, \
+            self.acc_value, self.acc_update_op, self.iou_value, self.iou_update_op, self.metrics_reset_op = self._build_metrics()
             # Add summary ops for TensorBoard.
             self.summaries_training, self.summaries_evaluation = self._build_summary_ops()
             # Initialize the global and local (for the metrics) variables.
@@ -429,6 +433,12 @@ class FCN8s:
             acc_value = tf.identity(acc_value, name='acc_value')
             acc_update_op = tf.identity(acc_update_op, name='acc_update_op')
 
+            # 3: per class IoU
+
+            iou_value, iou_update_op = per_iou.per_class_iou(labels=labels_argmax,
+                                                             predictions=self.predictions_argmax,
+                                                             num_classes=self.num_classes)
+
             # As of version 1.3, TensorFlow's streaming metrics don't have reset operations,
             # so we need to create our own as a work-around. Say we want to evaluate
             # a metric after every training epoch. If we didn't have
@@ -445,6 +455,8 @@ class FCN8s:
                 mean_iou_update_op,
                 acc_value,
                 acc_update_op,
+                iou_value,
+                iou_update_op,
                 metrics_reset_op)
 
     def _build_summary_ops(self):
@@ -524,7 +536,8 @@ class FCN8s:
 
         # save Per-class IoU for current epoch per batch
         # 3: per-class IoU
-        self.test = IOU(self.num_classes)
+        self.metric_update_ops.append(self.iou_update_op)
+        self.metric_value_tensors.append(self.iou_value)
 
     def train(self,
               train_generator,
@@ -802,11 +815,11 @@ class FCN8s:
 
         # Reset all metrics' accumulator variables.
         self.sess.run(self.metrics_reset_op)
-        with tf.variable_scope("confusion", reuse=tf.AUTO_REUSE):
-            running_confusion = tf.get_variable(shape=[self.num_classes, self.num_classes],
-                                                initializer=tf.zeros_initializer, name='confusion_matrix',
-                                                trainable=False)
-        self.sess.run(running_confusion.initializer)
+        # with tf.variable_scope("confusion", reuse=tf.AUTO_REUSE):
+        #     running_confusion = tf.get_variable(shape=[self.num_classes, self.num_classes],
+        #                                         initializer=tf.zeros_initializer, name='confusion_matrix',
+        #                                         trainable=False)
+        # self.sess.run(running_confusion.initializer)
 
         # Set up the progress bar.
         tr = trange(num_batches, file=sys.stdout)
@@ -820,20 +833,18 @@ class FCN8s:
 
             # Added for per-class IoU
             labels_argmax = tf.argmax(self.labels, axis=-1, name='labels_argmax', output_type=tf.int64)
-            cur_confusion = tf.cast(self.test.calc_batch_cm(labels_argmax, self.predictions_argmax), tf.float32)
-            self.sess.run([self.metric_update_ops, tf.assign_add(running_confusion, cur_confusion)],
+            # cur_confusion = tf.cast(self.test.calc_batch_cm(labels_argmax, self.predictions_argmax), tf.float32)
+            self.sess.run(self.metric_update_ops,
                           feed_dict={self.image_input: batch_images,
                                      self.labels: batch_labels,
                                      self.keep_prob: 1.0,
                                      self.l2_regularization_rate: l2_regularization})
 
         # Compute final metric values.
-        running_iou = self.test.iou_class(confusion_matrix=running_confusion)
         self.metric_values = self.sess.run(self.metric_value_tensors)
-        self.per_class_iou = self.sess.run(running_iou)
 
         # further class IDs are not used ref:cityscapesscripts/helper/labels.py
-        self.per_class_iou = self.per_class_iou[:20]
+        self.per_class_iou = self.metric_values[3][:20]
 
         evaluation_results_string = ' '
         for i, metric_name in enumerate(self.metric_names):
