@@ -1,4 +1,4 @@
-from deeplabV2_sep_tensorflow import FCN8s
+from deeplabV2_sep_mixup_tensorflow import FCN8s
 from data_generator.batch_generator import BatchGenerator
 from helpers.visualization_utils import print_segmentation_onto_image, create_video_from_images
 from cityscapesscripts.helpers.labels import TRAINIDS_TO_COLORS_DICT, TRAINIDS_TO_RGBA_DICT
@@ -26,7 +26,7 @@ train_ground_truth_dirs = [train_gt]
 val_image_dirs = [val_images]
 val_ground_truth_dirs = [val_gt]
 
-num_classes = 34 # TODO: Set the number of segmentation classes.
+num_classes = 20 # TODO: Set the number of segmentation classes.
 
 train_dataset = BatchGenerator(image_dirs=train_image_dirs,
                                image_file_extension='png',
@@ -53,21 +53,37 @@ print("Size of validation dataset: ", num_val_images, " images")
 # TODO: Set the batch size. I'll use the same batch size for both generators here.
 batch_size = 4
 
-train_generator = train_dataset.generate(batch_size=batch_size,
-                                         convert_colors_to_ids=False,
-                                         convert_ids_to_ids=False,
-                                         convert_to_one_hot=True,
-                                         void_class_id=None,
-                                         random_crop=False,
-                                         crop=False,
-                                         resize=False,
-                                         brightness=False,
-                                         flip=0.5,
-                                         translate=False,
-                                         scale=False,
-                                         gray=False,
-                                         to_disk=False,
-                                         shuffle=True)
+train_generator1 = train_dataset.generate(batch_size=batch_size,
+                                          convert_colors_to_ids=False,
+                                          convert_ids_to_ids=False,
+                                          convert_to_one_hot=True,
+                                          void_class_id=None,
+                                          random_crop=False,
+                                          crop=False,
+                                          resize=False,
+                                          brightness=False,
+                                          flip=0.5,
+                                          translate=False,
+                                          scale=False,
+                                          gray=False,
+                                          to_disk=False,
+                                          shuffle=True)
+
+train_generator2 = train_dataset.generate(batch_size=batch_size,
+                                          convert_colors_to_ids=False,
+                                          convert_ids_to_ids=False,
+                                          convert_to_one_hot=True,
+                                          void_class_id=None,
+                                          random_crop=False,
+                                          crop=False,
+                                          resize=False,
+                                          brightness=False,
+                                          flip=0.5,
+                                          translate=False,
+                                          scale=False,
+                                          gray=False,
+                                          to_disk=False,
+                                          shuffle=True)
 
 val_generator = val_dataset.generate(batch_size=batch_size,
                                      convert_colors_to_ids=False,
@@ -106,7 +122,7 @@ def learning_rate_schedule(step):
         return 0.000001
 
 
-model.train(train_generator=train_generator,
+model.train(train_generator1=train_generator1,
             epochs=epochs,
             steps_per_epoch=ceil(num_train_images / batch_size),
             learning_rate_schedule=learning_rate_schedule,

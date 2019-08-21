@@ -110,11 +110,16 @@ class FCN8s:
         else: # Load only the pre-trained VGG-16 encoder and build the rest of the graph from scratch.
 
             # Load the pretrained convolutionalized VGG-16 model as our encoder.
-            self.image_input, self.keep_prob, self.pool3_out, self.pool4_out, self.conv4_out, self.fc7_out = self._load_vgg16()
+            self.image_input, self.keep_prob, self.pool3_out, self.pool4_out, self.conv4_out, self.fc7_out, self.a = self._load_vgg16()
             # Build the decoder on top of the VGG-16 encoder.
             self.fcn8s_output, self.l2_regularization_rate = self._build_decoder()
             # Build the part of the graph that is relevant for the training.
+            self.lamb = tf.placeholder(dtype=tf.float32, name='mixup_ratio')
             self.labels = tf.placeholder(dtype=tf.int32, shape=[None, None, None, self.num_classes], name='labels_input')
+            self.labels1 = tf.placeholder(dtype=tf.int32, shape=[None, None, None, self.num_classes],
+                                          name='labels_input1')
+            self.labels2 = tf.placeholder(dtype=tf.int32, shape=[None, None, None, self.num_classes],
+                                          name='labels_input2')
             self.total_loss, self.train_op, self.learning_rate, self.global_step = self._build_optimizer()
             # Add the prediction outputs.
             self.softmax_output, self.predictions_argmax = self._build_predictor()
@@ -158,8 +163,9 @@ class FCN8s:
         pool4_out = graph.get_tensor_by_name(vgg16_pool4_out_tensor_name)
         conv4_out = graph.get_tensor_by_name(vgg16_conv4_out_tensor_name)
         fc7_out = graph.get_tensor_by_name(vgg16_fc7_out_tensor_name)
+        a = graph.get_tensor_by_name('Processing/concat:0')
 
-        return image_input, keep_prob, pool3_out, pool4_out, conv4_out, fc7_out
+        return image_input, keep_prob, pool3_out, pool4_out, conv4_out, fc7_out, a
 
     def _build_decoder(self):
         '''
@@ -359,33 +365,9 @@ class FCN8s:
                                            activation='relu',
                                            )(afc7_4)
 
-            concated = tf.concat([afc8_1, afc8_2, afc8_3, afc8_4], axis=-1)
+            logit_small = 0.25 * (afc8_1 + afc8_2 + afc8_3 + afc8_4)    # normalized
 
-            scoremap1 = tf.keras.layers.Conv2D(filters=self.num_classes * 4,
-                                               kernel_size=(3, 3),
-                                               strides=(1, 1),
-                                               padding='same',
-                                               kernel_initializer=tf.glorot_normal_initializer(),
-                                               name='scoremap',
-                                               activation='linear'
-                                               )(concated)
-
-            scoremap2 = tf.keras.layers.Conv2D(filters=self.num_classes * 4,
-                                               kernel_size=(1, 1),
-                                               strides=(1, 1),
-                                               padding='same',
-                                               kernel_initializer=tf.glorot_normal_initializer(),
-                                               name='scoremap',
-                                               activation='linear'
-                                               )(scoremap1)
-
-            attention_weight = tf.keras.layers.Softmax()(scoremap2)
-
-            attentioned_value = concated * attention_weight
-            a1, a2, a3, a4 = tf.split(attentioned_value, 4, axis=-1)
-            attentioned_value = 0.25 * (a1 + a2 + a3 + a4)
-
-            upsample = tf.keras.layers.UpSampling2D((8, 8), name='upsample', interpolation='bilinear')(attentioned_value)
+            upsample = tf.keras.layers.UpSampling2D((8, 8), name='upsample', interpolation='bilinear')(logit_small)
             fcn8s_output = tf.identity(upsample, name='fcn8s_output')
 
         return upsample, l2_regularization_rate
@@ -404,7 +386,10 @@ class FCN8s:
             regularization_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES) # This is a list of the individual loss values, so we still need to sum them up.
             regularization_loss = tf.add_n(regularization_losses, name='regularization_loss') # Scalar
             # Compute the total loss.
-            approximation_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=self.labels, logits=self.fcn8s_output), name='approximation_loss') # Scalar
+            # approximation_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=self.labels, logits=self.fcn8s_output), name='approximation_loss') # Scalar
+            approximation_loss1 = tf.nn.softmax_cross_entropy_with_logits(labels=self.labels1, logits=self.fcn8s_output) # Vector
+            approximation_loss2 = tf.nn.softmax_cross_entropy_with_logits(labels=self.labels2, logits=self.fcn8s_output) # Vector
+            approximation_loss = tf.reduce_mean(self.lamb * approximation_loss1 + (1 - self.lamb) * approximation_loss2, name='approximation_loss') # Scalar
             total_loss = tf.add(approximation_loss, regularization_loss, name='total_loss')
             # Compute the gradients and apply them.
             optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, name='adam_optimizer')
@@ -431,11 +416,17 @@ class FCN8s:
 
         with tf.variable_scope('metrics') as scope:
 
+
             labels_argmax = tf.argmax(self.labels, axis=-1, name='labels_argmax', output_type=tf.int64)
 
             # 1: Mean loss
-
-            mean_loss_value, mean_loss_update_op = tf.metrics.mean(self.total_loss)
+            regularization_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES) # This is a list of the individual loss values, so we still need to sum them up.
+            regularization_loss = tf.add_n(regularization_losses, name='regularization_loss')  # Scalar
+            approximation_loss = tf.reduce_mean(
+                tf.nn.softmax_cross_entropy_with_logits(labels=self.labels, logits=self.fcn8s_output),
+                name='approximation_loss')  # Scalar
+            total_loss = tf.add(approximation_loss, regularization_loss)
+            mean_loss_value, mean_loss_update_op = tf.metrics.mean(total_loss)
 
             mean_loss_value = tf.identity(mean_loss_value, name='mean_loss_value')
             mean_loss_update_op = tf.identity(mean_loss_update_op, name='mean_loss_update_op')
@@ -564,7 +555,7 @@ class FCN8s:
         self.metric_value_tensors.append(self.iou_value)
 
     def train(self,
-              train_generator,
+              train_generator1,
               epochs,
               steps_per_epoch,
               learning_rate_schedule,
@@ -715,7 +706,23 @@ class FCN8s:
 
             for train_step in tr:
 
-                batch_images, batch_labels = next(train_generator)
+                lamb = np.random.beta(0.2, 0.2)
+
+                batch_images1, batch_labels1 = next(train_generator1)
+                batch_images2 = batch_images1[::-1]
+                batch_labels2 = batch_labels1[::-1]
+                # batch_images2, batch_labels2 = next(train_generator2)
+
+                batch_labels1, batch_labels2 = np.float32(batch_labels1), np.float32(batch_labels2)
+
+                if np.shape(batch_images1)[0] != np.shape(batch_images2)[0]:
+                    min_batch = np.min((np.shape(batch_images1)[0], np.shape(batch_images2)[0]))
+                    batch_images = lamb * batch_images1[:min_batch] + (1 - lamb) * batch_images2[:min_batch]
+                    batch_labels1 = batch_labels1[:min_batch]
+                    batch_labels2 = batch_labels2[:min_batch]
+
+                else:
+                    batch_images = lamb * batch_images1 + (1 - lamb) * batch_images2
 
                 if record_summaries and (self.g_step % summaries_frequency == 0):
                     _, current_loss, self.g_step, training_summary = self.sess.run([self.train_op,
@@ -723,7 +730,9 @@ class FCN8s:
                                                                                     self.global_step,
                                                                                     self.summaries_training],
                                                                                    feed_dict={self.image_input: batch_images,
-                                                                                              self.labels: batch_labels,
+                                                                                              self.lamb: lamb,
+                                                                                              self.labels1: batch_labels1,
+                                                                                              self.labels2: batch_labels2,
                                                                                               self.learning_rate: learning_rate,
                                                                                               self.keep_prob: keep_prob,
                                                                                               self.l2_regularization_rate: l2_regularization})
@@ -733,7 +742,9 @@ class FCN8s:
                                                                   self.total_loss,
                                                                   self.global_step],
                                                                  feed_dict={self.image_input: batch_images,
-                                                                            self.labels: batch_labels,
+                                                                            self.lamb: lamb,
+                                                                            self.labels1: batch_labels1,
+                                                                            self.labels2: batch_labels2,
                                                                             self.learning_rate: learning_rate,
                                                                             self.keep_prob: keep_prob,
                                                                             self.l2_regularization_rate: l2_regularization})
@@ -756,7 +767,7 @@ class FCN8s:
             if (len(metrics) > 0) and (epoch % eval_frequency == 0):
 
                 if eval_dataset == 'train':
-                    data_generator = train_generator
+                    data_generator = train_generator1
                     num_batches = steps_per_epoch
                     description = 'Evaluation on training dataset'
                 elif eval_dataset == 'val':
@@ -850,14 +861,12 @@ class FCN8s:
         tr.set_description(description)
 
         # Accumulate metrics in batches.
-        # Accumulate metrics in batches.
         for step in tr:
 
             batch_images, batch_labels = next(data_generator)
+            batch_labels = np.float32(batch_labels)
 
             # Added for per-class IoU
-            labels_argmax = tf.argmax(self.labels, axis=-1, name='labels_argmax', output_type=tf.int64)
-            # cur_confusion = tf.cast(self.test.calc_batch_cm(labels_argmax, self.predictions_argmax), tf.float32)
             self.sess.run(self.metric_update_ops,
                           feed_dict={self.image_input: batch_images,
                                      self.labels: batch_labels,
