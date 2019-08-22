@@ -706,7 +706,7 @@ class FCN8s:
 
             for train_step in tr:
 
-                lamb = np.random.beta(0.2, 0.2)
+                lamb = np.random.beta(0.1, 0.1)
 
                 batch_images1, batch_labels1 = next(train_generator1)
                 batch_images2 = batch_images1[::-1]
