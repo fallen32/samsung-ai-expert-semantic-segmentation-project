@@ -111,6 +111,7 @@ class FCN8s:
 
             # Load the pretrained convolutionalized VGG-16 model as our encoder.
             self.image_input, self.keep_prob, self.pool3_out, self.pool4_out, self.conv4_out, self.fc7_out = self._load_vgg16()
+            self.istrain = tf.placeholder(dtype=tf.bool)
             # Build the decoder on top of the VGG-16 encoder.
             self.fcn8s_output, self.l2_regularization_rate = self._build_decoder()
             # Build the part of the graph that is relevant for the training.
@@ -359,7 +360,18 @@ class FCN8s:
                                            activation='relu',
                                            )(afc7_4)
 
-            logit_small = 0.25 * (afc8_1 + afc8_2 + afc8_3 + afc8_4)    # normalized
+            skip_pool5 = tf.keras.layers.Conv2D(
+                                                filters=self.num_classes,
+                                                kernel_size=(1, 1),
+                                                strides=(1, 1),
+                                                padding='same',
+                                                kernel_initializer=tf.initializers.he_normal(),
+                                                kernel_regularizer=tf.contrib.layers.l2_regularizer(l2_regularization_rate),
+                                                name='skip',
+                                                activation='relu',
+                                                )(pool5_1)
+
+            logit_small = 0.20 * (afc8_1 + afc8_2 + afc8_3 + afc8_4 + skip_pool5)    # normalized
 
             upsample = tf.keras.layers.UpSampling2D((8, 8), name='upsample', interpolation='bilinear')(logit_small)
             fcn8s_output = tf.identity(upsample, name='fcn8s_output')
@@ -563,7 +575,8 @@ class FCN8s:
               summaries_frequency=10,
               summaries_dir=None,
               summaries_name=None,
-              training_loss_display_averaging=3):
+              training_loss_display_averaging=3,
+              ):
         '''
         Trains the model.
 
@@ -690,7 +703,7 @@ class FCN8s:
             tr.set_description('Epoch {}/{}'.format(epoch, epochs))
 
             for train_step in tr:
-
+                istrain = True
                 batch_images, batch_labels = next(train_generator)
 
                 if record_summaries and (self.g_step % summaries_frequency == 0):
@@ -702,7 +715,8 @@ class FCN8s:
                                                                                               self.labels: batch_labels,
                                                                                               self.learning_rate: learning_rate,
                                                                                               self.keep_prob: keep_prob,
-                                                                                              self.l2_regularization_rate: l2_regularization})
+                                                                                              self.l2_regularization_rate: l2_regularization,
+                                                                                              self.istrain: istrain})
                     training_writer.add_summary(summary=training_summary, global_step=self.g_step)
                 else:
                     _, current_loss, self.g_step = self.sess.run([self.train_op,
@@ -712,7 +726,8 @@ class FCN8s:
                                                                             self.labels: batch_labels,
                                                                             self.learning_rate: learning_rate,
                                                                             self.keep_prob: keep_prob,
-                                                                            self.l2_regularization_rate: l2_regularization})
+                                                                            self.l2_regularization_rate: l2_regularization,
+                                                                            self.istrain: istrain})
 
                 self.variables_updated = True
 
@@ -730,7 +745,6 @@ class FCN8s:
             ##############################################################
 
             if (len(metrics) > 0) and (epoch % eval_frequency == 0):
-
                 if eval_dataset == 'train':
                     data_generator = train_generator
                     num_batches = steps_per_epoch
@@ -838,7 +852,8 @@ class FCN8s:
                           feed_dict={self.image_input: batch_images,
                                      self.labels: batch_labels,
                                      self.keep_prob: 1.0,
-                                     self.l2_regularization_rate: l2_regularization})
+                                     self.l2_regularization_rate: l2_regularization,
+                                     self.istrain: False})
 
         # Compute final metric values.
         self.metric_values = self.sess.run(self.metric_value_tensors)
